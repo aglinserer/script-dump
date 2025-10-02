@@ -1,0 +1,61 @@
+#!/bin/bash
+
+BDADDR=
+DATESTRING=$(date +%Y-%m-%d_%H-%M)
+
+baseline () {
+	TIME="${2:-10}"
+	echo "Waiting for $TIME seconds"
+	sleep $TIME
+	echo "Finished waiting"
+}
+
+receive () {
+
+    DEST=$(pwd)/obex-receive
+    # kill old instance
+    pkill obexd
+    /usr/libexec/bluetooth/obexd -a -n -r ${DEST} &
+    OBEXD_PID=$!
+
+	    while read -r line; do
+			if [[ $line =~ \"complete\" ]]; then
+		 		echo "Transfer completed"
+				kill $OBEXD_PID
+				exit 0
+		    fi
+	    done < <(dbus-monitor --session "type='signal',sender='org.bluez.obex',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged'" )
+	echo "Finished receive"
+}
+
+send () {
+	echo "Sleeping for 5"
+	sleep 5
+	echo "Transmitting file using bt-obex"
+	bt-obex -p ${BDADDR} random-data.txt
+	echo "Sent file and sleep again"
+	sleep 5
+}
+
+
+sudo btmon -w ${DATESTRING} > /dev/null &
+BTMON_PID=$!
+
+case "$1" in
+    h|\?)
+        echo "Usage: $0 [-v] [-n name]"
+        exit 0
+        ;;
+    send)
+	send
+        ;;
+    receive)  
+        receive
+        ;;
+    baseline)
+	    baseline
+	    ;;
+esac
+
+kill $BTMON_PID
+
